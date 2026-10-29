@@ -1,0 +1,7 @@
+# Publish only source, documentation, and offline tests.
+/*
+!/.gitignore
+!/README.md
+!/ocs-course-switcher.user.js
+!/verify.cjs
+!/verify-scroll.cjs
