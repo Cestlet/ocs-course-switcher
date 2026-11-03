@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OCS 学习通多课程切换器
 // @namespace    local.ocs-course-switcher
-// @version      0.2.2
+// @version      0.2.3
 // @description  指定课程队列，进入首个章节，收到 OCS 完成提示后切换课程。
 // @match        https://*.chaoxing.com/*
 // @match        https://chaoxing.com/*
@@ -168,7 +168,7 @@
     if (link && /^https?:/.test(link.href)) { go(link.href); return; }
     el.click();
   }
-  function findFirstChapter() {
+  function findFirstChapter(expected) {
     // 只查找用于进入章节的按钮，不读取任务点数量或章节完成状态。
     const selectors = [
       '[onclick^="getTeacherAjax"]',
@@ -185,11 +185,31 @@
       '.chapter_unit .chapter_name',
       '[data-knowledgeid][onclick]'
     ];
-    for (const selector of selectors) {
-      const found = [...document.querySelectorAll(selector)].find(el => visible(el) && !el.closest('[aria-disabled="true"],.locked,.lock'));
-      if (found) return found;
+    // 合并选择器后按文档顺序挑选，不能让后面的按钮类型优先于前面的章节链接。
+    return [...document.querySelectorAll(selectors.join(','))].find(el => {
+      if (!visible(el) || el.closest('[aria-disabled="true"],.locked,.lock')) return false;
+      const target = course(el.closest('a[href]')?.href);
+      return !target || sameCourse(target, expected);
+    }) || null;
+  }
+  function chapterLabel(el) {
+    const name = (el.getAttribute('title') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80) || '未命名章节';
+    let id = el.getAttribute('data-knowledgeid') || '';
+    const link = el.closest('a[href]');
+    if (link) {
+      try {
+        const params = new Map([...new URL(link.href).searchParams].map(([key, value]) => [key.toLowerCase(), value]));
+        id ||= params.get('chapterid') || params.get('knowledgeid') || '';
+      } catch {}
     }
-    return null;
+    if (!id) {
+      const code = el.getAttribute('onclick') || '';
+      const args = [...code.matchAll(/['"]([^'"]*)['"]/g)].map(match => match[1]);
+      if (/^\s*toOld\s*\(/.test(code)) id = args[1] || '';
+      else if (/^\s*getTeacherAjax\s*\(/.test(code)) id = args[2] || '';
+    }
+    // 只记录章节标识，不记录完整地址或课程访问参数。
+    return `${name}（章节 ID：${/^[\w-]{1,80}$/.test(id) ? id : '未提供'}）`;
   }
   function studyPage() { return /\/mycourse\/studentstudy(?:\/|$)/.test(location.pathname); }
   function contextCourse() { return course(location.href) || course(document.referrer); }
@@ -228,6 +248,8 @@
         }
       }
       if (s.phase === 'opening') {
+        // 未识别课程身份的 iframe 也不能执行章节入口或菜单。
+        if (!sameCourse(current, expected)) return;
         if (window === window.top && !s.chapterListOpened) {
           const listFrame = [...document.querySelectorAll('iframe[src]')].find(frame => {
             try { const url = new URL(frame.src); return /\/mycourse\/studentcourse$/.test(url.pathname) && sameCourse(course(url.href), expected); } catch { return false; }
@@ -236,13 +258,11 @@
             s.chapterListOpened = true; s.openedAt = now; note(s, '打开课程章节列表'); write(s); go(listFrame.src); return;
           }
         }
-        const first = findFirstChapter();
+        const first = findFirstChapter(expected);
         if (first) {
-          // 必须属于当前课程。跨课程旧 iframe 不执行。
-          if (!current && window === window.top) return;
           const fresh = read();
           if (fresh.epoch !== s.epoch || fresh.phase !== 'opening') return;
-          fresh.phase = 'entering'; fresh.clickedAt = now; note(fresh, '正在进入第一个可点击章节'); write(fresh);
+          fresh.phase = 'entering'; fresh.clickedAt = now; note(fresh, `正在进入第一个可点击章节：${chapterLabel(first)}`); write(fresh);
           clearOldCompletion(); clickHere(first); return;
         }
         if (!s.menuAt) {
@@ -296,7 +316,7 @@
     style.textContent = ':host{display:block}*{box-sizing:border-box}summary{cursor:pointer;font-weight:700;padding:10px}.handle{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#eef4ff;border-radius:12px 12px 0 0;cursor:move;touch-action:none;user-select:none}.handle strong{font-size:1em}.body{padding:10px 16px 16px;max-height:72vh;overflow:auto}button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid #bdcadb;border-radius:6px;background:#f5f8fc;color:#20344d;padding:7px 10px;margin:4px}button:disabled{opacity:.45;cursor:default}.row{display:flex;align-items:center;border-bottom:1px solid #e7ecf3;padding:8px 0;gap:5px}.name{flex:1;word-break:break-word}input[type=checkbox]{width:18px;height:18px}input[type=text],textarea,select{width:100%;border:1px solid #bdcadb;border-radius:5px;padding:8px;margin:5px 0}input[type=number]{width:80px}small{color:#5c6c80;font-size:.85em}p{margin:9px 0}.error{color:#b12727}';
     root.append(style);
     const handle = document.createElement('div'); handle.className = 'handle';
-    const heading = document.createElement('strong'); heading.textContent = 'OCS 多课程切换器 · 0.2.2'; handle.append(heading);
+    const heading = document.createElement('strong'); heading.textContent = 'OCS 多课程切换器 · 0.2.3'; handle.append(heading);
     button(view.collapsed ? '展开' : '收起', () => { view.collapsed = !view.collapsed; saveView(); lastView = ''; render(read()); }, handle);
     root.append(handle); dragWindow(handle);
     const details = document.createElement('details'); details.open = !view.collapsed;

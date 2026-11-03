@@ -17,7 +17,8 @@ const path = require('node:path');
       window.GM_getTab = callback => callback({ ocsCourseSwitcherId: 'scroll-test' });
       window.GM_saveTab = () => {};
     }, queue);
-    await page.addScriptTag({ content: fs.readFileSync(path.join(__dirname,'ocs-course-switcher.user.js'),'utf8') });
+    const source = fs.readFileSync(path.join(__dirname,'ocs-course-switcher.user.js'),'utf8');
+    await page.addScriptTag({ content: source });
     const list = page.locator('.course-list');
     const positions = () => page.evaluate(() => { const root = document.querySelector('[data-ocs-switcher]').shadowRoot; return { list: root.querySelector('.course-list').scrollTop, body: root.querySelector('.body').scrollTop }; });
     await list.evaluate(el => { el.scrollTop = 780; });
@@ -37,7 +38,7 @@ const path = require('node:path');
     await page.getByRole('button',{name:'收起',exact:true}).click();
     await page.getByRole('button',{name:'展开',exact:true}).click();
     assert.deepEqual(await positions(),beforeCollapse);
-    const report = { passed:true,version:'0.2.2',courseCount:40,checks:['连续勾选与取消勾选后列表不回顶','面板外层滚动不回顶','收起展开后保持滚动位置'],testedAt:new Date().toISOString() };
+    const report = { passed:true,version:source.match(/@version\s+(\S+)/)[1],courseCount:40,checks:['连续勾选与取消勾选后列表不回顶','面板外层滚动不回顶','收起展开后保持滚动位置'],testedAt:new Date().toISOString() };
     fs.writeFileSync(path.join(__dirname,'scroll-verification.json'),JSON.stringify(report,null,2));
     console.log(JSON.stringify(report,null,2));
   } finally { await browser.close(); }

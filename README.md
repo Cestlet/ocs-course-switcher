@@ -2,7 +2,9 @@
 
 配合现有 OCS Desktop 与脚本猫运行，负责课程队列、进入第一章节和切换课程。无需修改或替换 OCS。
 
-当前版本：0.2.2。
+当前版本：0.2.3。
+
+0.2.3 修复：按目录中的文档顺序选择首个可点击章节，避免后面的某类按钮抢先命中而跳过首章；禁止身份未知的 iframe 执行章节导航，并在运行记录中显示实际点击的章节名称和 ID。
 
 0.2.2 修复：勾选或取消课程时保留课程列表和面板的滚动位置；收起再展开也保留位置。已用 40 门模拟课程连续操作验证。
 
@@ -32,7 +34,8 @@
 ## 与 OCS 配合
 
 - 关闭 OCS 的“完成全部后重新学习”，否则 OCS 可能回到第一章继续播放，而不产生完成提示。
-- OCS 自身的章节跳转模式继续使用你的现有设置。OCS 开启“自动前往首个任务点”时，可能在进入第一章后自行跳到未完成章节。
+- 需要按目录顺序运行时，将 OCS 的“跳转模式”设为“完成后跳转下一节”，并关闭“自动前往首个任务点”，避免首次进入章节后再次跳到别处。
+- OCS 5.2.7 的“智能模式”分支安排点击未完成章节后，仍会继续执行普通的下一节导航，存在两个导航相互覆盖的风险。该版本建议使用上面的顺序模式，详见 [官方源码](https://github.com/ocsjs/ocsjs/blob/5.2.7/packages/scripts/src/projects/cx.ts)。切换器不修改 OCS 源码。
 - 只有完整的“全部任务点已完成！”提示才触发自动切课。“已到最后一章”“仍有任务点未完成”均不会触发。
 - 本工具直接信任 OCS 的提示，不再次检查平台后台进度。因此它不能修正 OCS 本身对完成状态的误判。
 - 运行时保持该标签页打开。同一队列只由点击开始的标签页执行；其他标签页只显示队列状态。
@@ -52,6 +55,8 @@
 
 `verify.cjs` 用独立 Chromium 和离线模拟页面验证主要流程，运行后生成 `verification.json`。`verify-scroll.cjs` 用 40 门模拟课程验证滚动位置保持。
 
+`verify-chapters.cjs` 验证混合入口类型按目录顺序选择、隐藏及锁定入口过滤、课程身份校验，以及 OCS 接管后不会再次点击首章。切换器只负责首次进入章节；同一门课后续章节的执行顺序仍由 OCS 的跳转模式决定。
+
 已在实际 OCS 浏览器验证课程名称扫描、从课程首页进入首节视频页，以及 0.2.2 脚本安装生效。自动完成提示后的跨课程切换通过离线模拟验证，尚未等待实际整门课程播放结束验收。
 
 ## 文件
@@ -59,6 +64,7 @@
 - `ocs-course-switcher.user.js`：可直接导入脚本猫的完整脚本。
 - `verify.cjs`：离线验证程序，使用本机现有 `playwright-core` 与 Chrome，无需安装 npm 依赖。
 - `verify-scroll.cjs`：长课程列表的滚动位置回归验证。
+- `verify-chapters.cjs`：章节入口顺序和导航阶段回归验证。
 - `verification.json`、`verification.png`、`scroll-verification.json`：本地运行验证后生成，不随源码发布。
 
 重跑验证（PowerShell，路径按本机安装位置修改）：
@@ -68,4 +74,5 @@ $env:OCS_PLAYWRIGHT_DIR = "$env:LOCALAPPDATA\Programs\OCS Desktop\resources\app\
 $env:OCS_CHROME_PATH = "$env:LOCALAPPDATA\Programs\OCS Desktop\resources\bin\chrome\chrome\chrome.exe"
 node .\verify.cjs
 node .\verify-scroll.cjs
+node .\verify-chapters.cjs
 ```
